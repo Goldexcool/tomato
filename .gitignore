@@ -2,9 +2,20 @@
 /Lib/
 /Scripts/
 /Include/
+/share/
 pyvenv.cfg
 *.pyc
 __pycache__/
+
+# Python backend files
+*.py
+requirements.txt
+*.h5
+saved_model/
+*.whl
+render.yaml
+start.sh
+SETUP_GUIDE.md
 
 # Environment variables
 .env
