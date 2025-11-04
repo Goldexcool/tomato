@@ -1,0 +1,39 @@
+# Python virtual environment (specific paths only)
+/Lib/
+/Scripts/
+/Include/
+pyvenv.cfg
+*.pyc
+__pycache__/
+
+# Environment variables
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Node modules and Next.js
+node_modules/
+.next/
+OLD_FILES/
+app/
+package.json
+package-lock.json
+tsconfig.json
+next.config.js
+next-env.d.ts
+postcss.config.mjs
+tailwind.config.ts
+.eslintrc.json
+
+# Keep public folder
+!public/
