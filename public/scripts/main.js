@@ -367,44 +367,97 @@ async function exportResults() {
     }
 }
 
-async function uploadImage(file) {
+async function uploadImage(file, retryCount = 0) {
+    const MAX_RETRIES = 3;
+    const RETRY_DELAY = 3000; // 3 seconds
+    
     // Hide idle state
     document.getElementById('idle').style.display = 'none';
     
-    // Show loading
-    document.getElementById('loading').style.display = 'block';
+    // Show loading with retry info
+    const loadingElement = document.getElementById('loading');
+    loadingElement.style.display = 'block';
     document.getElementById('results').style.display = 'none';
     document.getElementById('error').style.display = 'none';
+    
+    // Update loading message for retries
+    const loadingText = loadingElement.querySelector('p');
+    if (retryCount > 0) {
+        loadingText.textContent = `🔄 Retry attempt ${retryCount}/${MAX_RETRIES}... The API may be waking up (this can take 1-2 minutes on Render.com)`;
+    } else {
+        loadingText.textContent = '🔬 Analyzing leaf image with AI model...';
+    }
 
     const formData = new FormData();
     formData.append('file', file);
 
     try {
+        console.log(`[Attempt ${retryCount + 1}] Sending request to: ${API_URL}`);
+        
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
+
         const response = await fetch(API_URL, {
             method: 'POST',
             body: formData,
             headers: {
                 'Accept': 'application/json'
-            }
+            },
+            signal: controller.signal
         });
+
+        clearTimeout(timeoutId);
+        
+        console.log(`Response status: ${response.status}`);
 
         if (!response.ok) {
             const errorText = await response.text();
+            console.error('Server error response:', errorText);
             throw new Error(`Server error: ${response.status} - ${errorText}`);
         }
 
         const data = await response.json();
+        console.log('Success! Response data:', data);
         displayResults(data);
+        
     } catch (error) {
-        console.error('Error:', error);
+        console.error(`[Attempt ${retryCount + 1}] Error:`, error);
+        
+        // Retry logic for network errors
+        if (retryCount < MAX_RETRIES && 
+            (error.name === 'AbortError' || 
+             error.message.includes('Failed to fetch') || 
+             error.message.includes('NetworkError'))) {
+            
+            console.log(`Retrying in ${RETRY_DELAY/1000} seconds...`);
+            await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+            return uploadImage(file, retryCount + 1);
+        }
+        
+        // Show error after all retries exhausted
         document.getElementById('loading').style.display = 'none';
         document.getElementById('error').style.display = 'block';
         
         const errorTextEl = document.getElementById('errorText');
-        if (error.message.includes('Failed to fetch')) {
-            errorTextEl.textContent = '⚠️ Unable to connect to AI server. The API at Render.com may be starting up (this can take 1-2 minutes). Please try again in a moment.';
+        if (error.name === 'AbortError') {
+            errorTextEl.innerHTML = `
+                <strong>⏱️ Request Timeout</strong><br>
+                The API took too long to respond. This usually means:<br>
+                • The Render.com server is cold starting (first request after inactivity)<br>
+                • Please wait 1-2 minutes and try again<br>
+                • Check API status at: <a href="https://tensorflow-model-api.onrender.com" target="_blank" style="color: #43A047;">API Health Check</a>
+            `;
+        } else if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+            errorTextEl.innerHTML = `
+                <strong>⚠️ Connection Failed</strong><br>
+                Unable to reach the AI server after ${MAX_RETRIES} attempts.<br>
+                • The Render.com API may be starting up (takes 1-2 minutes)<br>
+                • Check your internet connection<br>
+                • Verify API is online: <a href="https://tensorflow-model-api.onrender.com" target="_blank" style="color: #43A047;">Visit API</a><br>
+                • Try again in a moment
+            `;
         } else {
-            errorTextEl.textContent = `Error: ${error.message}`;
+            errorTextEl.innerHTML = `<strong>❌ Error:</strong> ${error.message}`;
         }
     }
 }
